@@ -1,122 +1,166 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+
+import { useEffect, useState } from "react";
+
+type Forecast = {
+  time: string;
+  temperature: number;
+  shortwave_radiation: number;
+};
+
+type WeatherData = {
+  latitude: number;
+  longitude: number;
+  timezone: string;
+  forecast: Forecast[];
+};
+
+type City = {
+  id: number;
+  name: string;
+  country: string;
+  latitude: number;
+  longitude: number;
+};
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [cities, setCities] = useState<City[]>([]);
+  const [search, setSearch] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const [selectedLocation, setSelectedLocation] = useState(
+    "Helsinki, Finland"
+  );
+
+  // Load Helsinki weather initially
+  useEffect(() => {
+    async function loadWeather() {
+      try {
+        setLoading(true);
+
+        const response = await fetch("/api/weather");
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch weather data");
+        }
+
+        const data: WeatherData = await response.json();
+        setWeather(data);
+      } catch {
+        setError("Unable to load weather data");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadWeather();
+  }, []);
+
+  // Search for cities
+  async function searchCities() {
+    if (!search.trim()) return;
+
+    try {
+      setError("");
+      setCities([]);
+
+      const response = await fetch(
+        `/api/locations?name=${encodeURIComponent(search)}`
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to search locations");
+      }
+
+      const data: City[] = await response.json();
+      setCities(data);
+    } catch {
+      setError("Unable to search locations");
+    }
+  }
+
+  // Fetch weather when a city is selected
+  async function selectCity(city: City) {
+    try {
+      setLoading(true);
+      setError("");
+      setWeather(null);
+      setCities([]);
+      setSearch("");
+
+      setSelectedLocation(`${city.name}, ${city.country}`);
+
+      const response = await fetch(
+        `/api/weather?latitude=${city.latitude}&longitude=${city.longitude}`
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch weather");
+      }
+
+      const data: WeatherData = await response.json();
+
+      setWeather(data);
+    } catch {
+      setError("Unable to load weather for this location");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
+    <main>
+      <h1>Energy Weather Dashboard</h1>
+
+      <h2>{selectedLocation}</h2>
+
+      {/* Location search */}
+      <div>
+        <input
+          type="text"
+          placeholder="Search for a city..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+
+        <button onClick={searchCities}>Search</button>
+
+        {/* Search results */}
+        {cities.map((city) => (
+          <div key={city.id}>
+            <button onClick={() => selectCity(city)}>
+              {city.name}, {city.country}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* Error message */}
+      {error && <p>{error}</p>}
+
+      {/* Loading indicator */}
+      {loading && <p>Loading weather data...</p>}
+
+      {/* Weather forecast */}
+      {!loading && weather && (
         <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+          <h3>Hourly Weather Forecast</h3>
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+          {weather.forecast.slice(0, 5).map((hour) => (
+            <div key={hour.time}>
+              <p>Time: {hour.time}</p>
+              <p>Temperature: {hour.temperature}°C</p>
+              <p>
+                Solar Irradiance: {hour.shortwave_radiation} W/m²
+              </p>
+              <hr />
+            </div>
+          ))}
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+      )}
+    </main>
+  );
 }
 
-export default App
+export default App;
