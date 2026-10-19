@@ -33,3 +33,18 @@ def get_weather( latitude: float, longitude: float):
         "timezone": data["timezone"],
         "forecast": forecasts
     }
+
+
+def search_city(name: str):
+    url = "https://geocoding-api.open-meteo.com/v1/search"
+
+    params = {
+        "name": name,
+        "count": 5
+    }
+
+    response = httpx.get(url, params=params, timeout=10)
+    response.raise_for_status()
+
+    data = response.json()
+    return data.get("results", [])
