@@ -15,5 +15,5 @@ def health_check():
     }
 
 @app.get("/api/weather")
-def weather():
-    return get_weather()
+def weather(latitude: float = 60.17, longitude: float = 24.94):
+    return get_weather(latitude, longitude)
