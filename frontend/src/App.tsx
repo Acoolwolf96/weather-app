@@ -1,4 +1,4 @@
-
+import WeatherCharts from "./WeatherCharts";
 import { useEffect, useState } from "react";
 
 type Forecast = {
@@ -147,16 +147,7 @@ function App() {
         <div>
           <h3>Hourly Weather Forecast</h3>
 
-          {weather.forecast.slice(0, 5).map((hour) => (
-            <div key={hour.time}>
-              <p>Time: {hour.time}</p>
-              <p>Temperature: {hour.temperature}°C</p>
-              <p>
-                Solar Irradiance: {hour.shortwave_radiation} W/m²
-              </p>
-              <hr />
-            </div>
-          ))}
+          <WeatherCharts forecast={weather.forecast} />
         </div>
       )}
     </main>
