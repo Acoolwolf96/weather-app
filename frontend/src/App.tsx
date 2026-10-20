@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import WeatherCharts from "./WeatherCharts";
 import WeatherSummary from "./WeatherSummary";
 
@@ -30,38 +30,60 @@ function App() {
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState("");
 
-  // Search for cities
-  async function searchCities() {
-    if (!search.trim()) {
-      setError("Please enter a city name");
+  // Search for cities automatically as the user types
+  useEffect(() => {
+    const query = search.trim();
+
+    if (query.length < 2) {
       return;
     }
 
-    try {
-      setError("");
-      setCities([]);
+    const controller = new AbortController();
 
-      const response = await fetch(
-        `/api/locations?name=${encodeURIComponent(search.trim())}`
-      );
+    const timer = setTimeout(async () => {
+      try {
+        setSearchLoading(true);
 
-      if (!response.ok) {
-        throw new Error("Failed to search locations");
+        const response = await fetch(
+          `/api/locations?name=${encodeURIComponent(query)}`,
+          { signal: controller.signal }
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to search locations");
+        }
+
+        const data: City[] = await response.json();
+
+        if (!controller.signal.aborted) {
+          setCities(data);
+        }
+      } catch {
+        if (!controller.signal.aborted) {
+          setError("Unable to search locations");
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setSearchLoading(false);
+        }
       }
+    }, 350);
 
-      const data: City[] = await response.json();
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [search]);
 
-      if (data.length === 0) {
-        setError("No matching locations found");
-        return;
-      }
-
-      setCities(data);
-    } catch {
-      setError("Unable to search locations");
-    }
+  // Update search input
+  function handleSearchChange(value: string) {
+    setSearch(value);
+    setCities([]);
+    setError("");
+    setSearchLoading(false);
   }
 
   // Fetch weather when a city is selected
@@ -72,6 +94,7 @@ function App() {
       setWeather(null);
       setCities([]);
       setSearch("");
+      setSearchLoading(false);
 
       setSelectedLocation(`${city.name}, ${city.country}`);
 
@@ -94,53 +117,116 @@ function App() {
   }
 
   return (
-    <main>
-      <h1>Energy Weather Dashboard</h1>
+    <main className="dashboard">
+      {/* Dashboard Header */}
+      <header className="dashboard-header">
+        <div className="brand">
+          <div className="brand-icon">⚡</div>
 
-      {/* Show location only when selected */}
-      {selectedLocation && <h2>{selectedLocation}</h2>}
-
-      {/* Location search */}
-      <div>
-        <input
-          type="text"
-          placeholder="Search for a city..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-
-        <button onClick={searchCities}>Search</button>
-
-        {/* Search results */}
-        {cities.map((city) => (
-          <div key={city.id}>
-            <button onClick={() => selectCity(city)}>
-              {city.name}, {city.country}
-            </button>
+          <div>
+            <h1>Providers</h1>
+            <p>Energy Weather</p>
           </div>
-        ))}
-      </div>
+        </div>
 
-      {/* Error message */}
-      {error && <p>{error}</p>}
+        <div className="header-status">
+          Weather Forecast Dashboard
+        </div>
+      </header>
 
-      {/* Loading indicator */}
-      {loading && <p>Loading weather data...</p>}
+      {/* Location Search */}
+      <section className="location-panel">
+        <div className="location-heading">
+          <div>
+            <span className="section-label">LOCATION</span>
 
-      {/* Initial message */}
-      {!weather && !loading && !error && (
-        <p>Search for a city to view its weather forecast.</p>
+            <h2>
+              {selectedLocation || "Select a location"}
+            </h2>
+          </div>
+        </div>
+
+        <div className="search-container">
+          <div className="autocomplete">
+            <input
+              type="search"
+              placeholder="Search for a city..."
+              value={search}
+              autoComplete="off"
+              aria-label="Search for a city"
+              onChange={(e) =>
+                handleSearchChange(e.target.value)
+              }
+            />
+
+            {searchLoading && (
+              <div className="search-loading">
+                Searching locations...
+              </div>
+            )}
+
+            {/* Autocomplete Dropdown */}
+            {cities.length > 0 && (
+              <div className="search-results">
+                {cities.map((city) => (
+                  <button
+                    key={city.id}
+                    type="button"
+                    className="city-option"
+                    onClick={() => selectCity(city)}
+                  >
+                    {city.name}, {city.country}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Error */}
+      {error && (
+        <p className="error-message">{error}</p>
       )}
 
-      {/* Weather forecast */}
+      {/* Loading */}
+      {loading && (
+        <p className="loading-message">
+          Loading weather data...
+        </p>
+      )}
+
+      {/* Initial State */}
+      {!weather && !loading && !error && (
+        <div className="empty-state">
+          <h3>Explore weather forecasts</h3>
+          <p>
+            Search for a city to view temperature and solar
+            irradiance forecasts.
+          </p>
+        </div>
+      )}
+
+      {/* Weather Dashboard */}
       {!loading && weather && (
-        <div>
+        <>
           <WeatherSummary forecast={weather.forecast} />
 
-          <h3>Hourly Weather Forecast</h3>
+          <div className="forecast-heading">
+            <div>
+              <span className="section-label">
+                FORECAST ANALYSIS
+              </span>
+              <h2>Hourly Weather Forecast</h2>
+            </div>
+
+            <span className="forecast-period">
+              Next 24 hours
+            </span>
+          </div>
 
           <WeatherCharts forecast={weather.forecast} />
-        </div>
+        </>
       )}
     </main>
   );
