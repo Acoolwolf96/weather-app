@@ -32,6 +32,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState("");
+  const [noResults, setNoResults] = useState(false);
 
   // Search for cities automatically as the user types
   useEffect(() => {
@@ -60,10 +61,12 @@ function App() {
 
         if (!controller.signal.aborted) {
           setCities(data);
+          setNoResults(data.length === 0);
         }
       } catch {
         if (!controller.signal.aborted) {
           setError("Unable to search locations");
+          setNoResults(false);
         }
       } finally {
         if (!controller.signal.aborted) {
@@ -84,6 +87,7 @@ function App() {
     setCities([]);
     setError("");
     setSearchLoading(false);
+    setNoResults(false);
   }
 
   // Fetch weather when a city is selected
@@ -95,6 +99,7 @@ function App() {
       setCities([]);
       setSearch("");
       setSearchLoading(false);
+      setNoResults(false);
 
       setSelectedLocation(`${city.name}, ${city.country}`);
 
@@ -159,9 +164,17 @@ function App() {
               }
             />
 
+            {/* Search loading indicator */}
             {searchLoading && (
               <div className="search-loading">
                 Searching locations...
+              </div>
+            )}
+
+            {/* No matching locations */}
+            {!searchLoading && noResults && (
+              <div className="search-loading" role="status">
+                No matching locations found for "{search}"
               </div>
             )}
 
