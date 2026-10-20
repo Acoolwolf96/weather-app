@@ -22,7 +22,7 @@ def weather(latitude: float, longitude: float):
     
     except httpx.TimeoutException:
         raise HTTPException(
-            status_code=500, 
+            status_code=504, 
             detail="Weather service timed out"
         )
 
