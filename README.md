@@ -11,7 +11,7 @@
 ### 1. Clone the repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/Acoolwolf96/weather-app.git
 cd weather-app
 ```
 
