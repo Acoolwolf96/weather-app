@@ -1,0 +1,13 @@
+
+services:
+  backend:
+    build: ./backend
+    container_name: providers-backend
+
+  frontend:
+    build: ./frontend
+    container_name: providers-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
