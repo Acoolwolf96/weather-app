@@ -1,5 +1,7 @@
+
+import { useState } from "react";
 import WeatherCharts from "./WeatherCharts";
-import { useEffect, useState } from "react";
+import WeatherSummary from "./WeatherSummary";
 
 type Forecast = {
   time: string;
@@ -28,45 +30,21 @@ function App() {
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const [selectedLocation, setSelectedLocation] = useState(
-    "Helsinki, Finland"
-  );
-
-  // Load Helsinki weather initially
-  useEffect(() => {
-    async function loadWeather() {
-      try {
-        setLoading(true);
-
-        const response = await fetch("/api/weather");
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch weather data");
-        }
-
-        const data: WeatherData = await response.json();
-        setWeather(data);
-      } catch {
-        setError("Unable to load weather data");
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadWeather();
-  }, []);
+  const [selectedLocation, setSelectedLocation] = useState("");
 
   // Search for cities
   async function searchCities() {
-    if (!search.trim()) return;
+    if (!search.trim()) {
+      setError("Please enter a city name");
+      return;
+    }
 
     try {
       setError("");
       setCities([]);
 
       const response = await fetch(
-        `/api/locations?name=${encodeURIComponent(search)}`
+        `/api/locations?name=${encodeURIComponent(search.trim())}`
       );
 
       if (!response.ok) {
@@ -74,6 +52,12 @@ function App() {
       }
 
       const data: City[] = await response.json();
+
+      if (data.length === 0) {
+        setError("No matching locations found");
+        return;
+      }
+
       setCities(data);
     } catch {
       setError("Unable to search locations");
@@ -113,7 +97,8 @@ function App() {
     <main>
       <h1>Energy Weather Dashboard</h1>
 
-      <h2>{selectedLocation}</h2>
+      {/* Show location only when selected */}
+      {selectedLocation && <h2>{selectedLocation}</h2>}
 
       {/* Location search */}
       <div>
@@ -142,9 +127,16 @@ function App() {
       {/* Loading indicator */}
       {loading && <p>Loading weather data...</p>}
 
+      {/* Initial message */}
+      {!weather && !loading && !error && (
+        <p>Search for a city to view its weather forecast.</p>
+      )}
+
       {/* Weather forecast */}
       {!loading && weather && (
         <div>
+          <WeatherSummary forecast={weather.forecast} />
+
           <h3>Hourly Weather Forecast</h3>
 
           <WeatherCharts forecast={weather.forecast} />
