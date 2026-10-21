@@ -1,23 +1,22 @@
+from threading import Lock
+
 import httpx
 from cachetools import TTLCache
 
 API_URL = "https://api.open-meteo.com/v1/forecast"
 
-weather_cache =  TTLCache(maxsize=100, ttl=600)
+weather_cache = TTLCache(maxsize=100, ttl=600)
+weather_cache_lock = Lock()
 
 
-def get_weather( latitude: float, longitude: float):
+def get_weather(latitude: float, longitude: float):
 
     cache_key = (latitude, longitude)
-    print(f"Requested coordinates: {cache_key}")
-    print(f"Cached locations: {list(weather_cache.keys())}")
-
-    # Check if the weather data is already cached
-    if cache_key in weather_cache:
-        print("Returning cached weather data")
-        return weather_cache[cache_key]
-
-    print("Fetching new weather data from API")
+    # TTLCache reads may expire entries, so reads and writes share the lock.
+    with weather_cache_lock:
+        cached = weather_cache.get(cache_key)
+    if cached is not None:
+        return cached
 
     params = {
         "latitude": latitude,
@@ -27,6 +26,8 @@ def get_weather( latitude: float, longitude: float):
         "timezone": "auto"
     } 
 
+    # Slow provider requests must not serialize independent location requests.
+    # Occasional duplicate requests on concurrent cache misses are acceptable.
     response = httpx.get(API_URL, params=params, timeout=10)
     response.raise_for_status()
 
@@ -50,7 +51,8 @@ def get_weather( latitude: float, longitude: float):
     }
 
     # Cache the weather data
-    weather_cache[cache_key] = result
+    with weather_cache_lock:
+        weather_cache[cache_key] = result
 
     return result
 

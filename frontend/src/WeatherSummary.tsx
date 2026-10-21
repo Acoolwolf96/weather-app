@@ -1,41 +1,56 @@
- 
-type Forecast = {
-  time: string;
-  temperature: number;
-  shortwave_radiation: number;
-};
+import type { Forecast } from "./types";
+import { isAvailable } from "./weatherFormat";
 
-type WeatherSummaryProps = {
-  forecast: Forecast[];
-};
-
-function WeatherSummary({ forecast }: WeatherSummaryProps) {
-  if (forecast.length === 0) return null;
-
-  const temperatures = forecast.map((hour) => hour.temperature);
-  const radiation = forecast.map((hour) => hour.shortwave_radiation);
-
-  const minTemp = Math.min(...temperatures);
-  const maxTemp = Math.max(...temperatures);
-  const peakRadiation = Math.max(...radiation);
+function WeatherSummary({ forecast }: { forecast: Forecast[] }) {
+  const temperatures = forecast
+    .map((hour) => hour.temperature)
+    .filter(isAvailable);
+  const radiation = forecast
+    .map((hour) => hour.shortwave_radiation)
+    .filter(isAvailable);
+  const minTemp = temperatures.length ? Math.min(...temperatures) : null;
+  const maxTemp = temperatures.length ? Math.max(...temperatures) : null;
+  const peakRadiation = radiation.length ? Math.max(...radiation) : null;
 
   return (
-    <div className="weather-summary">
+    <dl className="weather-summary">
       <div className="summary-card">
-        <h3>Minimum Temperature</h3>
-        <p>{minTemp.toFixed(1)} °C</p>
+        <dt>Minimum temperature</dt>
+        <dd>
+          {minTemp === null ? (
+            "Unavailable"
+          ) : (
+            <>
+              {minTemp.toFixed(1)} <span>°C</span>
+            </>
+          )}
+        </dd>
       </div>
-
       <div className="summary-card">
-        <h3>Maximum Temperature</h3>
-        <p>{maxTemp.toFixed(1)} °C</p>
+        <dt>Maximum temperature</dt>
+        <dd>
+          {maxTemp === null ? (
+            "Unavailable"
+          ) : (
+            <>
+              {maxTemp.toFixed(1)} <span>°C</span>
+            </>
+          )}
+        </dd>
       </div>
-
-      <div className="summary-card">
-        <h3>Peak Solar Irradiance</h3>
-        <p>{peakRadiation.toFixed(0)} W/m²</p>
+      <div className="summary-card solar-summary">
+        <dt>Peak irradiance</dt>
+        <dd>
+          {peakRadiation === null ? (
+            "Unavailable"
+          ) : (
+            <>
+              {peakRadiation.toFixed(0)} <span>W/m²</span>
+            </>
+          )}
+        </dd>
       </div>
-    </div>
+    </dl>
   );
 }
 
