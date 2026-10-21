@@ -68,14 +68,15 @@ function weather(
     latitude: 60,
     longitude: 24,
     timezone: "Europe/Helsinki",
+    retrieved_at: "2026-10-21T12:00:00Z",
     forecast: [
       {
-        time: "2026-10-21T23:00",
+        time: "2026-10-21T23:00:00Z",
         temperature: value,
         shortwave_radiation: radiation,
       },
       {
-        time: "2026-10-22T00:00",
+        time: "2026-10-22T00:00:00Z",
         temperature: value,
         shortwave_radiation: radiation,
       },
@@ -356,6 +357,16 @@ describe("location search", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Unable to search");
     expect(card("Helsinki").queryByRole("alert")).not.toBeInTheDocument();
     expect(card("Helsinki").getAllByText("10.0")).toHaveLength(2);
+    expect(weatherRequests()).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Retry search" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(350);
+    });
+    await act(async () => {
+      requests.at(-1)!.resolve([cities[1]]);
+    });
+    expect(screen.getByRole("button", { name: /^Oulu,/ })).toBeEnabled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(weatherRequests()).toHaveLength(1);
   });
 });

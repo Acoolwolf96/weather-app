@@ -11,6 +11,7 @@ function App() {
   const [searchError, setSearchError] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
   const [noResults, setNoResults] = useState(false);
+  const [searchAttempt, setSearchAttempt] = useState(0);
   const searchRequest = useRef<AbortController | null>(null);
   const searchInput = useRef<HTMLInputElement>(null);
   const atLimit = selectedCities.length >= MAX_LOCATIONS;
@@ -53,7 +54,7 @@ function App() {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [search]);
+  }, [search, searchAttempt]);
 
   function handleSearchChange(value: string) {
     searchRequest.current?.abort();
@@ -127,6 +128,7 @@ function App() {
               placeholder="Try Helsinki or Oulu…"
               value={search}
               autoComplete="off"
+              maxLength={100}
               aria-describedby="search-help"
               onChange={(e) => handleSearchChange(e.target.value)}
             />
@@ -137,9 +139,20 @@ function App() {
                 `No matching locations found for “${search}”.`}
             </div>
             {searchError && (
-              <p className="error-message" role="alert">
+              <div className="error-message" role="alert">
                 {searchError}
-              </p>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchError("");
+                      setSearchAttempt((attempt) => attempt + 1);
+                    }}
+                  >
+                    Retry search
+                  </button>
+                </div>
+              </div>
             )}
             {cities.length > 0 && (
               <ul className="search-results" aria-label="Matching locations">
@@ -195,6 +208,9 @@ function App() {
           ))}
         </div>
       )}
+      <footer className="provider-attribution">
+        Weather data by <a href="https://open-meteo.com/">Open-Meteo</a>
+      </footer>
     </main>
   );
 }

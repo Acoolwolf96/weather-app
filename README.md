@@ -1,100 +1,109 @@
-# weather-app
+# Providers · Energy Weather
 
-Compare hourly temperature and solar irradiance forecasts for up to **four locations**.
-Search for a city (results appear after a 350 ms pause), then select **Add**.
-City, administrative region and country distinguish similarly named locations.
-Already selected locations are marked **Added**; remove a card to make room at the limit.
+Compare temperature and solar irradiance forecasts for up to **four locations**.
+Search pauses for 350 ms before requesting results. Add cities, then use each
+card's **Refresh**, **Retry**, or **Remove** controls. Selected results are marked
+**Added**; removing a card immediately makes room.
 
-Each card loads independently and shows its forecast timezone, minimum/maximum
-temperature and peak irradiance. **Refresh** requests that card's forecast while
-keeping its previous data visible. If loading fails, use **Retry**. A failed refresh
-keeps the last successful forecast and displays a warning. **Remove** cancels that
-card's request without resetting other cards. Selection lasts for the current page session.
+Each card owns its request. One location can load or fail without resetting the
+others. Refresh keeps the previous forecast visible; a failed refresh shows a
+retryable warning. Removing a card cancels its request and ignores late responses.
+Search errors have a separate **Retry search** action. Selection lasts for the
+current page session.
 
-Charts show the provider's 24-hour forecast, with local dates and timezone in
-tooltips. Missing samples remain gaps; unavailable summaries are labelled
-**Unavailable**. Zero irradiance is valid. Refresh uses the existing endpoint and
-may return its cached forecast (10-minute server cache); it does not bypass the cache.
+## Run locally
 
-## Local development and verification
-
-Use Node.js 22.13+ (or a newer supported release) and Python 3.10+.
-Run the API in one terminal:
+Requires Node.js 22.13+ (or a newer supported release) and Python 3.10+.
 
 ```bash
 python -m venv .venv
-# Activate .venv using your shell's activation command.
-python -m pip install -r backend/requirements.txt
-cd backend
-python -m uvicorn main:app --reload
 ```
 
-Run the frontend in another terminal; Vite proxies `/api` to port 8000:
+Activate with `.venv\Scripts\Activate.ps1` in PowerShell, or
+`source .venv/bin/activate` on macOS/Linux. From the repository root:
 
 ```bash
-cd frontend
-npm ci
-npm run dev
+python -m pip install -r backend/requirements-dev.txt
+python -m uvicorn main:app --app-dir backend --reload
 ```
 
-Frontend checks:
+In a second terminal:
 
 ```bash
-cd frontend
-npm test
-npm run build
-npm run lint
+npm --prefix frontend ci
+npm --prefix frontend run dev
 ```
 
-Vitest and Testing Library cover independent requests, out-of-order responses,
-failures/retries, refresh retention, cancellation/re-addition, duplicates, capacity,
-debounced search, missing/zero values, chart gaps and local-time tooltips.
+Open http://localhost:5173. Vite proxies `/api` to the backend on port 8000.
+Production Python dependencies are pinned in `backend/requirements.txt`; pytest
+is separate in `requirements-dev.txt`. The timezone database supports validation
+on Windows and minimal systems as well as Linux.
 
-Backend checks (with the virtual environment active):
-
-```bash
-cd backend
-python -m unittest discover -p "test_*.py" -v
-```
-
-These exercise existing API error mappings, cache hits/expiry and four concurrent
-provider calls. Cache access is protected by a lock; provider calls run outside it.
-
-
-## Running the Application
-
-### Prerequisites
-
-- Docker
-- Docker Compose
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/Acoolwolf96/weather-app.git
-cd weather-app
-```
-
-### 2. Build and start the application
+## Run with Docker
 
 ```bash
 docker compose up --build -d
 ```
 
-### 3. Access the application
+Open http://localhost:8080. Nginx serves the frontend and proxies `/api` to FastAPI.
+Use `docker compose logs -f` to inspect logs and `docker compose down` to stop.
 
-Open your browser and navigate to:
+## Verify
 
-http://localhost:8080
-
-### 4. View container logs
-
-```bash
-docker compose logs -f
-```
-
-### 5. Stop the application
+With the Python environment active, run from the repository root:
 
 ```bash
-docker compose down
+python -m pytest backend -q
+npm --prefix frontend test
+npm --prefix frontend run lint
+npm --prefix frontend run build
 ```
+
+Backend tests mock provider responses and cover input validation, normalization,
+both endpoints' failures, null/zero handling, cache timestamps, deterministic
+expiry, and concurrent requests. Frontend tests cover independent cards,
+out-of-order and cancelled requests, refresh recovery, duplicate/limit handling,
+missing data, chart gaps, local dates, and daylight-saving transitions.
+
+## Forecast semantics and assumptions
+
+- The backend requests `forecast_hours=24`, Celsius, and Unix timestamps from
+  [Open-Meteo](https://open-meteo.com/en/docs). The UI labels this **Hourly forecast**
+  and displays the actual returned sample count and dated coverage; shorter series
+  are valid and are not padded.
+- The API converts Unix seconds directly to UTC ISO 8601 strings ending in `Z`.
+  The returned named timezone is retained separately. Every chart consumer formats
+  the absolute time in that location's timezone; detailed labels include a UTC
+  offset to distinguish repeated daylight-saving hours.
+- **Retrieved** is when the backend obtained the provider response, not the model
+  issue time or browser refresh time. Cache hits preserve that original timestamp.
+- Temperature is in °C at the indicated instant. Solar irradiance
+  (`shortwave_radiation`, W/m²) is the **mean over the preceding hour**.
+  Solar tooltips derive and display both ends of that interval.
+- Null measurements remain gaps. Zero is valid. Summaries use finite available
+  values, identify partial sample coverage, and show **Unavailable** when none
+  exist. An empty forecast displays an explicit empty state and is not cached.
+
+## Why the backend and cache exist
+
+FastAPI centralizes the provider contract, input checks, normalization, and error
+responses behind the existing `/api/locations` and `/api/weather` routes.
+Invalid coordinates/searches are rejected before provider calls. Malformed JSON,
+bad arrays, timestamps, units, or measurements produce a controlled 502; provider
+timeouts produce 504. Both endpoints use safe `detail` messages.
+
+A bounded, process-local cache holds up to 100 validated forecasts for 600 seconds,
+reducing repeated provider calls. A small lock protects cache access; HTTP requests
+remain outside it. Defensive copies prevent callers from mutating cached values.
+Concurrent cache misses may make duplicate provider requests.
+
+## Practical limitations and next step
+
+Refresh respects the ten-minute cache; it does not force a new upstream retrieval.
+There is no persistence, history, or automatic polling, and each backend process
+has its own cache. Provider availability and forecast coverage remain external
+constraints. The chart bundle currently triggers Vite's size advisory.
+
+One future improvement: refresh while the page is visible, using the retrieval
+time to avoid unnecessary requests and bounded retry delays after failures.
+This behavior is intentionally not implemented here.

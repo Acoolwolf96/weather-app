@@ -3,6 +3,7 @@ import WeatherCharts from "./WeatherCharts";
 import WeatherSummary from "./WeatherSummary";
 import { useWeather } from "./useWeather";
 import type { City } from "./types";
+import { formatForecastTime } from "./weatherFormat";
 
 type Props = { city: City; onRemove: () => void };
 
@@ -50,6 +51,15 @@ export default function LocationWeatherCard({ city, onRemove }: Props) {
           : "Forecast timezone: awaiting data"}
       </p>
 
+      {weather && (
+        <p className="forecast-meta retrieved-time">
+          Retrieved{" "}
+          <time dateTime={weather.retrieved_at}>
+            {formatForecastTime(weather.retrieved_at, weather.timezone)}
+          </time>
+        </p>
+      )}
+
       <div role="status" className="card-status">
         {loading &&
           (weather
@@ -87,7 +97,19 @@ export default function LocationWeatherCard({ city, onRemove }: Props) {
             </p>
           ) : (
             <>
-              <p className="forecast-period">24-hour forecast · Local time</p>
+              <p className="forecast-period">
+                Hourly forecast · {weather.forecast.length} samples
+                <br />
+                {formatForecastTime(
+                  weather.forecast[0].time,
+                  weather.timezone,
+                )}{" "}
+                →{" "}
+                {formatForecastTime(
+                  weather.forecast[weather.forecast.length - 1].time,
+                  weather.timezone,
+                )}
+              </p>
               <WeatherCharts
                 forecast={weather.forecast}
                 timezone={weather.timezone}
