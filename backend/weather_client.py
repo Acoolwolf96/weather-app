@@ -25,7 +25,7 @@ def get_weather( latitude: float, longitude: float):
         "hourly": "temperature_2m,shortwave_radiation",
         "forecast_hours": 24,
         "timezone": "auto"
-    }
+    } 
 
     response = httpx.get(API_URL, params=params, timeout=10)
     response.raise_for_status()
