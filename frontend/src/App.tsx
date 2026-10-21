@@ -1,77 +1,51 @@
+import { useState, useEffect, useRef } from "react";
+import LocationWeatherCard from "./LocationWeatherCard";
+import type { City } from "./types";
 
-import { useState, useEffect } from "react";
-import WeatherCharts from "./WeatherCharts";
-import WeatherSummary from "./WeatherSummary";
-
-type Forecast = {
-  time: string;
-  temperature: number;
-  shortwave_radiation: number;
-};
-
-type WeatherData = {
-  latitude: number;
-  longitude: number;
-  timezone: string;
-  forecast: Forecast[];
-};
-
-type City = {
-  id: number;
-  name: string;
-  country: string;
-  latitude: number;
-  longitude: number;
-};
+const MAX_LOCATIONS = 4;
 
 function App() {
-  const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [selectedCities, setSelectedCities] = useState<City[]>([]);
   const [cities, setCities] = useState<City[]>([]);
   const [search, setSearch] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
-  const [selectedLocation, setSelectedLocation] = useState("");
   const [noResults, setNoResults] = useState(false);
+  const searchRequest = useRef<AbortController | null>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const atLimit = selectedCities.length >= MAX_LOCATIONS;
 
-  // Search for cities automatically as the user types
   useEffect(() => {
     const query = search.trim();
-
-    if (query.length < 2) {
-      return;
-    }
+    if (query.length < 2) return;
 
     const controller = new AbortController();
-
+    searchRequest.current = controller;
     const timer = setTimeout(async () => {
+      if (controller.signal.aborted) return;
+      setSearchLoading(true);
       try {
-        setSearchLoading(true);
-
         const response = await fetch(
           `/api/locations?name=${encodeURIComponent(query)}`,
-          { signal: controller.signal }
+          {
+            signal: controller.signal,
+          },
         );
-
-        if (!response.ok) {
-          throw new Error("Failed to search locations");
-        }
-
+        if (!response.ok) throw new Error("Location search failed");
         const data: City[] = await response.json();
-
         if (!controller.signal.aborted) {
           setCities(data);
           setNoResults(data.length === 0);
         }
       } catch {
         if (!controller.signal.aborted) {
-          setError("Unable to search locations");
+          setSearchError(
+            "Unable to search locations. Please try searching again.",
+          );
           setNoResults(false);
         }
       } finally {
-        if (!controller.signal.aborted) {
-          setSearchLoading(false);
-        }
+        if (!controller.signal.aborted) setSearchLoading(false);
       }
     }, 350);
 
@@ -81,165 +55,145 @@ function App() {
     };
   }, [search]);
 
-  // Update search input
   function handleSearchChange(value: string) {
+    searchRequest.current?.abort();
     setSearch(value);
     setCities([]);
-    setError("");
+    setSearchError("");
     setSearchLoading(false);
     setNoResults(false);
   }
 
-  // Fetch weather when a city is selected
-  async function selectCity(city: City) {
-    try {
-      setLoading(true);
-      setError("");
-      setWeather(null);
-      setCities([]);
-      setSearch("");
-      setSearchLoading(false);
-      setNoResults(false);
-
-      setSelectedLocation(`${city.name}, ${city.country}`);
-
-      const response = await fetch(
-        `/api/weather?latitude=${city.latitude}&longitude=${city.longitude}`
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch weather");
+  function addCity(city: City) {
+    if (atLimit || selectedCities.some((selected) => selected.id === city.id))
+      return;
+    setSelectedCities((selected) => {
+      if (
+        selected.length >= MAX_LOCATIONS ||
+        selected.some((item) => item.id === city.id)
+      ) {
+        return selected;
       }
+      return [...selected, city];
+    });
+    handleSearchChange("");
+    searchInput.current?.focus();
+  }
 
-      const data: WeatherData = await response.json();
-
-      setWeather(data);
-    } catch {
-      setError("Unable to load weather for this location");
-    } finally {
-      setLoading(false);
-    }
+  function removeCity(id: number) {
+    setSelectedCities((selected) => selected.filter((city) => city.id !== id));
+    searchInput.current?.focus();
   }
 
   return (
     <main className="dashboard">
-      {/* Dashboard Header */}
       <header className="dashboard-header">
         <div className="brand">
-          <div className="brand-icon">⚡</div>
-
+          <div className="brand-icon" aria-hidden="true">
+            ⚡
+          </div>
           <div>
             <h1>Providers</h1>
             <p>Energy Weather</p>
           </div>
         </div>
-
-        <div className="header-status">
-          Weather Forecast Dashboard
-        </div>
+        <div className="header-status">Weather Forecast Dashboard</div>
       </header>
 
-      {/* Location Search */}
-      <section className="location-panel">
+      <section className="location-panel" aria-labelledby="search-heading">
         <div className="location-heading">
           <div>
-            <span className="section-label">LOCATION</span>
-
-            <h2>
-              {selectedLocation || "Select a location"}
-            </h2>
+            <span className="section-label">COMPARE LOCATIONS</span>
+            <h2 id="search-heading">Your weather, side by side</h2>
           </div>
+          <span className="location-count" role="status">
+            {selectedCities.length} of {MAX_LOCATIONS} locations
+          </span>
         </div>
-
+        <p id="search-help" className="search-help">
+          {atLimit
+            ? "Remove a location to add another."
+            : `Add up to ${MAX_LOCATIONS} cities to compare temperature and solar irradiance.`}
+        </p>
         <div className="search-container">
           <div className="autocomplete">
+            <label className="search-label" htmlFor="city-search">
+              Search for a city
+            </label>
             <input
+              id="city-search"
+              ref={searchInput}
               type="search"
-              placeholder="Search for a city..."
+              placeholder="Try Helsinki or Oulu…"
               value={search}
               autoComplete="off"
-              aria-label="Search for a city"
-              onChange={(e) =>
-                handleSearchChange(e.target.value)
-              }
+              aria-describedby="search-help"
+              onChange={(e) => handleSearchChange(e.target.value)}
             />
-
-            {/* Search loading indicator */}
-            {searchLoading && (
-              <div className="search-loading">
-                Searching locations...
-              </div>
+            <div className="search-status" role="status">
+              {searchLoading && "Searching locations…"}
+              {!searchLoading &&
+                noResults &&
+                `No matching locations found for “${search}”.`}
+            </div>
+            {searchError && (
+              <p className="error-message" role="alert">
+                {searchError}
+              </p>
             )}
-
-            {/* No matching locations */}
-            {!searchLoading && noResults && (
-              <div className="search-loading" role="status">
-                No matching locations found for "{search}"
-              </div>
-            )}
-
-            {/* Autocomplete Dropdown */}
             {cities.length > 0 && (
-              <div className="search-results">
-                {cities.map((city) => (
-                  <button
-                    key={city.id}
-                    type="button"
-                    className="city-option"
-                    onClick={() => selectCity(city)}
-                  >
-                    {city.name}, {city.country}
-                  </button>
-                ))}
-              </div>
+              <ul className="search-results" aria-label="Matching locations">
+                {cities.map((city) => {
+                  const added = selectedCities.some(
+                    (selected) => selected.id === city.id,
+                  );
+                  return (
+                    <li key={city.id}>
+                      <button
+                        type="button"
+                        className="city-option"
+                        disabled={added || atLimit}
+                        onClick={() => addCity(city)}
+                      >
+                        <span>
+                          {[city.name, city.admin1, city.country]
+                            .filter(Boolean)
+                            .join(", ")}
+                        </span>{" "}
+                        <span className="result-action">
+                          {added ? "Added" : atLimit ? "Limit reached" : "Add"}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </div>
         </div>
       </section>
 
-      {/* Error */}
-      {error && (
-        <p className="error-message">{error}</p>
-      )}
-
-      {/* Loading */}
-      {loading && (
-        <p className="loading-message">
-          Loading weather data...
-        </p>
-      )}
-
-      {/* Initial State */}
-      {!weather && !loading && !error && (
+      {selectedCities.length === 0 ? (
         <div className="empty-state">
-          <h3>Explore weather forecasts</h3>
+          <span className="empty-icon" aria-hidden="true">
+            ☀
+          </span>
+          <h2>Explore weather forecasts</h2>
           <p>
-            Search for a city to view temperature and solar
-            irradiance forecasts.
+            Search for a city and add a location to see its temperature and
+            solar irradiance forecast here.
           </p>
         </div>
-      )}
-
-      {/* Weather Dashboard */}
-      {!loading && weather && (
-        <>
-          <WeatherSummary forecast={weather.forecast} />
-
-          <div className="forecast-heading">
-            <div>
-              <span className="section-label">
-                FORECAST ANALYSIS
-              </span>
-              <h2>Hourly Weather Forecast</h2>
-            </div>
-
-            <span className="forecast-period">
-              Next 24 hours
-            </span>
-          </div>
-
-          <WeatherCharts forecast={weather.forecast} />
-        </>
+      ) : (
+        <div className="dashboard-grid">
+          {selectedCities.map((city) => (
+            <LocationWeatherCard
+              key={city.id}
+              city={city}
+              onRemove={() => removeCity(city.id)}
+            />
+          ))}
+        </div>
       )}
     </main>
   );
