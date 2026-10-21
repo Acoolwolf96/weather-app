@@ -25,6 +25,11 @@ function WeatherSummary({ forecast }: { forecast: Forecast[] }) {
             </>
           )}
         </dd>
+        {temperatures.length > 0 && temperatures.length < forecast.length && (
+          <dd className="partial-coverage">
+            Partial: {temperatures.length}/{forecast.length} samples
+          </dd>
+        )}
       </div>
       <div className="summary-card">
         <dt>Maximum temperature</dt>
@@ -37,6 +42,11 @@ function WeatherSummary({ forecast }: { forecast: Forecast[] }) {
             </>
           )}
         </dd>
+        {temperatures.length > 0 && temperatures.length < forecast.length && (
+          <dd className="partial-coverage">
+            Partial: {temperatures.length}/{forecast.length} samples
+          </dd>
+        )}
       </div>
       <div className="summary-card solar-summary">
         <dt>Peak irradiance</dt>
@@ -49,6 +59,11 @@ function WeatherSummary({ forecast }: { forecast: Forecast[] }) {
             </>
           )}
         </dd>
+        {radiation.length > 0 && radiation.length < forecast.length && (
+          <dd className="partial-coverage">
+            Partial: {radiation.length}/{forecast.length} samples
+          </dd>
+        )}
       </div>
     </dl>
   );

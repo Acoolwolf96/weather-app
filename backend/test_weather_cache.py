@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
+from datetime import datetime, timezone
 from threading import Barrier
-from unittest import TestCase
 from unittest.mock import Mock, patch
 
 from cachetools import TTLCache
@@ -8,58 +9,46 @@ from cachetools import TTLCache
 import weather_client
 
 
-def provider_response(latitude):
-    response = Mock()
-    response.json.return_value = {
-        "timezone": "Europe/Helsinki",
-        "hourly": {
-            "time": ["2026-10-21T23:00", "2026-10-22T00:00"],
-            "temperature_2m": [latitude, None],
-            "shortwave_radiation": [0, None],
-        },
-    }
-    return response
+def test_cache_hit_preserves_retrieval_time_and_cannot_be_mutated_by_caller(upstream):
+    with patch("weather_client.datetime", wraps=datetime) as clock:
+        clock.now.side_effect = [
+            datetime(2024, 1, 1, tzinfo=timezone.utc),
+            datetime(2024, 1, 2, tzinfo=timezone.utc),
+        ]
+        first = weather_client.get_weather(60, 24)
+        first["forecast"][0]["temperature"] = 999
+        second = weather_client.get_weather(60, 24)
+        assert second["forecast"][0]["temperature"] == 0
+        assert first["retrieved_at"] == second["retrieved_at"] == "2024-01-01T00:00:00Z"
+        assert clock.now.call_count == 1
+    upstream.assert_called_once()
 
 
-class WeatherCacheTests(TestCase):
-    def setUp(self):
-        self.cache_patch = patch.object(weather_client, "weather_cache", TTLCache(maxsize=100, ttl=600))
-        self.cache_patch.start()
-        self.addCleanup(self.cache_patch.stop)
+def test_four_provider_requests_can_run_concurrently(monkeypatch, provider_data):
+    barrier = Barrier(4)
 
-    def test_cache_hit_preserves_payload_and_avoids_provider_request(self):
-        with patch("weather_client.httpx.get", return_value=provider_response(60)) as get:
-            first = weather_client.get_weather(60, 24)
-            second = weather_client.get_weather(60, 24)
-        self.assertIs(first, second)
-        get.assert_called_once()
-        self.assertEqual(get.call_args.kwargs["params"]["forecast_hours"], 24)
-        self.assertEqual(first["forecast"][0]["shortwave_radiation"], 0)
-        self.assertIsNone(first["forecast"][1]["shortwave_radiation"])
-        self.assertIsNone(first["forecast"][1]["temperature"])
-        self.assertEqual(first["forecast"][0]["time"], "2026-10-21T23:00")
+    def fetch(_url, *, params, timeout):
+        # A provider call inside the cache lock would break this barrier.
+        barrier.wait(timeout=5)
+        data = deepcopy(provider_data)
+        data["hourly"]["temperature_2m"][0] = params["latitude"]
+        response = Mock()
+        response.json.return_value = data
+        return response
 
-    def test_four_provider_requests_can_run_concurrently(self):
-        barrier = Barrier(4)
+    monkeypatch.setattr(weather_client.httpx, "get", fetch)
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = list(pool.map(lambda lat: weather_client.get_weather(lat, 24), [60, 61, 62, 63]))
+    assert [data["forecast"][0]["temperature"] for data in results] == [60, 61, 62, 63]
+    with weather_client.weather_cache_lock:
+        assert len(weather_client.weather_cache) == 4
 
-        def fetch(_url, *, params, timeout):
-            # A provider call inside the cache lock would break this barrier.
-            barrier.wait(timeout=5)
-            return provider_response(params["latitude"])
 
-        with patch("weather_client.httpx.get", side_effect=fetch):
-            with ThreadPoolExecutor(max_workers=4) as pool:
-                results = list(pool.map(lambda lat: weather_client.get_weather(lat, 24), [60, 61, 62, 63]))
-        self.assertEqual([data["forecast"][0]["temperature"] for data in results], [60, 61, 62, 63])
-        with weather_client.weather_cache_lock:
-            self.assertEqual(len(weather_client.weather_cache), 4)
-
-    def test_expired_entry_is_fetched_again(self):
-        now = [0]
-        cache = TTLCache(maxsize=100, ttl=600, timer=lambda: now[0])
-        with patch.object(weather_client, "weather_cache", cache):
-            with patch("weather_client.httpx.get", return_value=provider_response(60)) as get:
-                weather_client.get_weather(60, 24)
-                now[0] = 601
-                weather_client.get_weather(60, 24)
-        self.assertEqual(get.call_count, 2)
+def test_cache_expiry_uses_a_deterministic_clock(monkeypatch, upstream):
+    now = [0]
+    cache = TTLCache(maxsize=100, ttl=600, timer=lambda: now[0])
+    monkeypatch.setattr(weather_client, "weather_cache", cache)
+    weather_client.get_weather(60, 24)
+    now[0] = 601
+    weather_client.get_weather(60, 24)
+    assert upstream.call_count == 2

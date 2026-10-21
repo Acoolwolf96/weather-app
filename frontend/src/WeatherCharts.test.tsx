@@ -26,11 +26,15 @@ vi.mock("recharts", async (importOriginal) => {
 });
 
 const forecast: Forecast[] = [
-  { time: "2026-10-21T22:00", temperature: 5, shortwave_radiation: 10 },
-  { time: "2026-10-21T23:00", temperature: 0, shortwave_radiation: 0 },
-  { time: "2026-10-22T00:00", temperature: null, shortwave_radiation: null },
-  { time: "2026-10-22T01:00", temperature: 2, shortwave_radiation: 0 },
-  { time: "2026-10-22T02:00", temperature: 3, shortwave_radiation: 2 },
+  { time: "2026-10-21T22:00:00Z", temperature: 5, shortwave_radiation: 10 },
+  { time: "2026-10-21T23:00:00Z", temperature: 0, shortwave_radiation: 0 },
+  {
+    time: "2026-10-22T00:00:00Z",
+    temperature: null,
+    shortwave_radiation: null,
+  },
+  { time: "2026-10-22T01:00:00Z", temperature: 2, shortwave_radiation: 0 },
+  { time: "2026-10-22T02:00:00Z", temperature: 3, shortwave_radiation: 2 },
 ];
 
 describe("forecast data presentation", () => {
@@ -53,17 +57,19 @@ describe("forecast data presentation", () => {
     fireEvent.keyDown(chart, { key: "ArrowRight" });
     await waitFor(() =>
       expect(
-        screen.getByText(/2026-10-21 23:00 · Pacific\/Auckland/),
+        screen.getByText(/22 Oct 2026, 12:00 GMT\+13 · Pacific\/Auckland/),
       ).toBeVisible(),
     );
     fireEvent.keyDown(chart, { key: "ArrowRight" });
     await waitFor(() =>
       expect(
-        screen.getByText(/2026-10-22 00:00 · Pacific\/Auckland/),
+        screen.getByText(/22 Oct 2026, 13:00 GMT\+13 · Pacific\/Auckland/),
       ).toBeVisible(),
     );
     expect(screen.getByText("Unavailable")).toBeVisible();
-    expect(formatForecastTime("2026-10-22T00:00")).toBe("2026-10-22 00:00");
+    expect(formatForecastTime("2026-10-22T00:00:00Z", "Europe/Helsinki")).toBe(
+      "22 Oct 2026, 03:00 GMT+3",
+    );
   });
 
   it("uses finite values for summaries, including zero, and marks missing metrics unavailable", () => {
@@ -72,7 +78,7 @@ describe("forecast data presentation", () => {
         forecast={[
           ...forecast,
           {
-            time: "2026-10-22T03:00",
+            time: "2026-10-22T03:00:00Z",
             temperature: Infinity,
             shortwave_radiation: NaN,
           },
@@ -82,11 +88,12 @@ describe("forecast data presentation", () => {
     expect(screen.getByText("0.0")).toBeVisible();
     expect(screen.getByText("5.0")).toBeVisible();
     expect(screen.getByText("10")).toBeVisible();
+    expect(screen.getAllByText("Partial: 4/6 samples")).toHaveLength(3);
     rerender(
       <WeatherSummary
         forecast={[
           {
-            time: "2026-10-22T00:00",
+            time: "2026-10-22T00:00:00Z",
             temperature: null,
             shortwave_radiation: null,
           },

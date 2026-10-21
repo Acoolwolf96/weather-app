@@ -11,7 +11,11 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import type { Forecast } from "./types";
-import { formatForecastTime, isAvailable } from "./weatherFormat";
+import {
+  formatForecastTime,
+  formatIrradianceInterval,
+  isAvailable,
+} from "./weatherFormat";
 
 type Props = { forecast: Forecast[]; timezone: string };
 
@@ -34,12 +38,12 @@ function WeatherCharts({ forecast, timezone }: Props) {
       : null,
   }));
   const labelFormatter = (label: unknown) =>
-    `${formatForecastTime(String(label))} · ${timezone}`;
+    `${formatForecastTime(String(label), timezone)} · ${timezone}`;
   const valueFormatter = (value: unknown) =>
     typeof value === "number" && Number.isFinite(value) ? value : "Unavailable";
   const timeAxis = {
     dataKey: "time",
-    tickFormatter: (time: string) => time.slice(11, 16),
+    tickFormatter: (time: string) => formatForecastTime(time, timezone, true),
     minTickGap: 28,
     tick: { fill: "#94a3b8", fontSize: 11 },
     axisLine: false,
@@ -70,6 +74,7 @@ function WeatherCharts({ forecast, timezone }: Props) {
               <XAxis {...timeAxis} />
               <YAxis {...valueAxis} />
               <Tooltip
+                position={{ x: 0 }}
                 contentStyle={tooltipStyle}
                 labelStyle={{ color: "#f8fafc" }}
                 itemStyle={{ color: "#e2e8f0" }}
@@ -96,6 +101,7 @@ function WeatherCharts({ forecast, timezone }: Props) {
           <span className="chart-key solar-key" />
           Solar irradiance <span>W/m²</span>
         </h3>
+        <p className="chart-note">Mean over the preceding hour</p>
         <div className="chart-container">
           <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <AreaChart
@@ -107,10 +113,13 @@ function WeatherCharts({ forecast, timezone }: Props) {
               <XAxis {...timeAxis} />
               <YAxis {...valueAxis} domain={[0, "auto"]} />
               <Tooltip
+                position={{ x: 0 }}
                 contentStyle={tooltipStyle}
                 labelStyle={{ color: "#f8fafc" }}
                 itemStyle={{ color: "#e2e8f0" }}
-                labelFormatter={labelFormatter}
+                labelFormatter={(label) =>
+                  formatIrradianceInterval(String(label), timezone)
+                }
                 formatter={valueFormatter}
                 filterNull={false}
               />

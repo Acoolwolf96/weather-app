@@ -472,3 +472,33 @@ input:focus-visible,
     transition: none;
   }
 }
+
+.retrieved-time {
+  margin-top: 4px;
+}
+.forecast-period {
+  overflow-wrap: anywhere;
+}
+.summary-card dd.partial-coverage {
+  font-size: 10px;
+  font-weight: 400;
+  color: #cbd5e1;
+}
+.chart-note {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: -4px 0 8px;
+}
+.provider-attribution {
+  margin-top: 24px;
+  text-align: center;
+  font-size: 12px;
+  color: #94a3b8;
+}
+.provider-attribution a {
+  color: #7dd3fc;
+}
+a:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 3px;
+}
